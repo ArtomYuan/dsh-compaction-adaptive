@@ -93,6 +93,44 @@ window.__ModuleLoader__.load({
       return h('span', { style: { fontSize: 12 } }, '压缩洞察')
     }
 
+    /**
+     * Left-sidebar list icon. `sidebar.panellist` renders the component passed
+     * as the registration's second argument, and hands it a `size`.
+     */
+    function PanelIcon({ size }) {
+      const px = typeof size === 'number' ? size : 16
+      return h('svg', {
+        width: px, height: px, viewBox: '0 0 16 16', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round',
+      },
+      h('path', { d: 'M2.5 3.5h11M2.5 8h7M2.5 12.5h4' }),
+      h('path', { d: 'M11 7.5v5M9 10l2 2 2-2', opacity: 0.85 }))
+    }
+
+    /**
+     * The `main` panel behind the left-sidebar entry.
+     *
+     * `main` is a root-scoped slot, so it receives no session props and cannot
+     * read the session projection. Rather than show stale or fabricated numbers,
+     * it reveals the real panel in the right sidebar, where the projection is in
+     * scope, and reports what happened if that call is unavailable.
+     */
+    function PanelPage(props) {
+      const [note, setNote] = React.useState('')
+      React.useEffect(() => {
+        try {
+          props.openPanel()
+        } catch (error) {
+          setNote(`无法自动打开右侧栏面板：${error instanceof Error ? error.message : String(error)}`)
+        }
+      }, [])
+      return h('div', { style: { padding: '22px 26px', color: COLORS.ink, fontSize: 13, lineHeight: 1.7 } },
+        h('div', { style: { fontSize: 15, fontWeight: 650, marginBottom: 6 } }, '压缩洞察'),
+        h('div', { style: { color: COLORS.muted } },
+          '面板在右侧栏打开：本会话的压缩事务、影子区间、摘要路由与耗时。'),
+        note === '' ? null : h('div', { style: { color: COLORS.bad, marginTop: 10 } }, note))
+    }
+
     return {
       inject: ['slots'],
       apply(ctx) {
@@ -122,6 +160,26 @@ window.__ModuleLoader__.load({
           { name: 'sidebar.right.pane.tab.title', key: id },
           Title,
         )), 'dsh-compaction-adaptive: tab title')
+
+        // Left-sidebar entry: the same id as the tab type, so the entry and the
+        // panel share one identity. `main` must exist for the entry to switch to,
+        // hence PanelPage; it forwards to the right sidebar.
+        ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
+          name: 'main',
+          key: id,
+          inject: () => ({
+            openPanel: () => {
+              ctx.sidebarRight.openTab(TYPE, {})
+            },
+          }),
+        }, PanelPage)), 'dsh-compaction-adaptive: main panel')
+
+        ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+          name: 'sidebar.panellist',
+          id,
+          order: 30,
+          label: () => '压缩洞察',
+        }, PanelIcon)), 'dsh-compaction-adaptive: sidebar entry')
       },
     }
   },

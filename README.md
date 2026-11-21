@@ -144,9 +144,10 @@ At runtime:
 
 ## Insight panel
 
-The package ships a read-only panel next to the conversation: the right sidebar's
-guide card carries **Compaction insight**, which opens one tab per session and
-lists the compaction transactions — when each ran, whether it was automatic or
+The package ships a read-only panel: the left sidebar lists **压缩洞察 / Compaction
+insight** beside the other panels, and the right sidebar exposes the same tab type
+through its guide card. The panel opens one tab per session and lists the
+compaction transactions — when each ran, whether it was automatic or
 `/compact`, the shadowed token count and node count, the summarizing route, the
 summary length, the duration, and the outcome.
 
