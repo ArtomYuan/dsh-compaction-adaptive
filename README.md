@@ -36,15 +36,25 @@ Cost ceilings stay expressible: a slow local prefill can cap its route with
 
 ## Install
 
-Requires DeepSeek Harness `>= 0.2.2-rc.1`. The plugin needs no build step: the
-repository is the package.
+Requires DeepSeek Harness `>= 0.2.2-rc.1`. There is no build step: the repository
+is the package, so the install is one line.
 
-```powershell
-# from a local checkout
+```sh
+# straight from GitHub
+dsh plugin --profile desktop add https://github.com/ArtomYuan/dsh-compaction-adaptive
+
+# pinned to a tag, for a reproducible profile
+dsh plugin --profile desktop add https://codeload.github.com/ArtomYuan/dsh-compaction-adaptive/tar.gz/refs/tags/v0.1.1
+
+# or a local checkout, while developing
 dsh plugin --profile desktop add D:\path\to\dsh-compaction-adaptive
 ```
 
-or install it as a bundle from **Plugins → Add plugin** and pick the directory.
+`dsh plugin` forwards to the bundled pnpm, so a git install is pinned to a commit
+in the profile lockfile; `dsh plugin --profile desktop update` moves it forward.
+
+The same URLs work in **Plugins → Add plugin**, where picking a local directory is
+also accepted.
 
 Mount it inside the Agent preset's `compaction` group in place of
 `compaction-basic` (one backend per realm):

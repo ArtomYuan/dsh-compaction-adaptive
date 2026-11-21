@@ -1,11 +1,22 @@
 {
   "name": "dsh-compaction-adaptive",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.1",
+  "private": false,
   "description": "Adaptive context compaction for DeepSeek Harness: derives each model's pressure threshold and retained tail from its context window and the session's measured growth.",
   "icon": "icon.svg",
   "type": "module",
   "main": "lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArtomYuan/dsh-compaction-adaptive.git"
+  },
+  "homepage": "https://github.com/ArtomYuan/dsh-compaction-adaptive#readme",
+  "bugs": {
+    "url": "https://github.com/ArtomYuan/dsh-compaction-adaptive/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./policy": "./lib/policy.js",
