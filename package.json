@@ -1,0 +1,42 @@
+{
+  "name": "dsh-compaction-adaptive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adaptive context compaction for DeepSeek Harness: derives each model's pressure threshold and retained tail from its context window and the session's measured growth.",
+  "icon": "icon.svg",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./policy": "./lib/policy.js",
+    "./chunking": "./lib/chunking.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "docs",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "compaction",
+    "context"
+  ],
+  "license": "MIT"
+}

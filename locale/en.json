@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Adaptive context compaction",
+    "description": "Condenses long sessions before they overflow, deriving each model's trigger point and retained tail from its context window and this session's measured growth instead of fixed ratios, and splitting an oversized summary request into parts it can actually ship.",
+    "detail": "docs/DETAIL.md"
+  }
+}

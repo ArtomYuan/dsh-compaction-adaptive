@@ -1,0 +1,14 @@
+# Installed bundles linked from a workspace do not need these, but a checkout does.
+node_modules/
+.pnpm-store/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Local scratch
+*.log
+*.local.*
