@@ -50,14 +50,25 @@ dsh plugin --profile desktop add dsh-compaction-adaptive
 dsh plugin --profile desktop add https://github.com/ArtomYuan/dsh-compaction-adaptive
 
 # pinned to a tag, for a reproducible profile
-dsh plugin --profile desktop add https://codeload.github.com/ArtomYuan/dsh-compaction-adaptive/tar.gz/refs/tags/v0.1.2
+dsh plugin --profile desktop add https://codeload.github.com/ArtomYuan/dsh-compaction-adaptive/tar.gz/refs/tags/v0.2.0
 
-# or a local checkout, while developing
-dsh plugin --profile desktop add D:\path\to\dsh-compaction-adaptive
+# a local checkout, while developing: pack it, then install the tarball
+pnpm pack --pack-destination .dist
+dsh plugin --profile desktop add .dist/dsh-compaction-adaptive-0.2.0.tgz
 ```
 
 `dsh plugin` forwards to the bundled pnpm, so a git install is pinned to a commit
 in the profile lockfile; `dsh plugin --profile desktop update` moves it forward.
+
+> **Install from a package, never as a linked directory.** A `link:` install
+> (adding the checkout path, `link:…`, or a directory that pnpm links) does not
+> install the package's dependencies. The plugin imports
+> `@deepseek-ai/dsh-compaction-basic`, `@deepseek-ai/dsh-llm` and
+> `@deepseek-ai/schemastery` from the Harness, so a linked install leaves those
+> imports unresolvable; the preset row then fails to activate, the realm has no
+> `compaction` service, and **every session fails to initialize** — sessions
+> vanish from the sidebar instead of reporting an error. Pack a tarball or install
+> from the registry.
 
 The same URLs work in **Plugins → Add plugin**, where picking a local directory is
 also accepted.
@@ -120,6 +131,7 @@ node test/policy.test.mjs          # threshold / tail planning
 node test/chunking.test.mjs        # packing, projection, prompts, concurrency
 node test/adaptive-chunking.test.mjs  # model-derived budgets, shrink/recover
 node test/insight.test.mjs         # panel projections: budget card, chunk card, transactions
+node test/projection.test.mjs      # session projection: fold, wire payload, schemas
 ```
 
 At runtime:
@@ -129,6 +141,21 @@ At runtime:
 [compaction-adaptive] deepseek-account/deepseek-flash window=1048576 budget=1015808 growth=12400 threshold=576716 (55.0%) tail=104038
 [compaction-adaptive] chunked summary (20043 tokens > 12822 budget): 2 parts <= 8243 tokens / 700000 B each, concurrency 2, capacity scale 100%
 ```
+
+## Insight panel
+
+The package ships a read-only panel next to the conversation: the right sidebar's
+guide card carries **Compaction insight**, which opens one tab per session and
+lists the compaction transactions — when each ran, whether it was automatic or
+`/compact`, the shadowed token count and node count, the summarizing route, the
+summary length, the duration, and the outcome.
+
+It reads a *session projection*, not the session itself: `lib/projection.js` folds
+`compaction/*` events into plain state, and the browser reads the published value
+by key through `useProjection`. The projection is registered with
+`wire.summary: false`, so it never rides along in a session summary; and both the
+fold and the view are wrapped so a failure degrades the panel to an empty list
+rather than failing a session load.
 
 ## Scope
 
@@ -164,6 +191,9 @@ environment empty).
 | `lib/policy.js` | Pure planning math (window, growth, threshold, tail); no Cordis dependency |
 | `lib/chunking.js` | Budget derivation, packing, text projection, digest/fold prompts, bounded concurrency |
 | `lib/insight.js` | Read-only projections for the observation panel: budget card, chunk card, compaction transactions |
+| `lib/projection.js` | Session projection behind the panel: fold, wire payload, schemas |
+| `insight-host.js` | Host row that registers the projection (`wire.summary: false`) |
+| `client.js` | Browser half: the `compaction-insight` tab type and its panel |
 | `lib/index.js` | The backend: observes, plans, installs the per-model policy, summarizes, delegates |
 | `cordis.patch.yml` | Bundle layer; explains why the row is mounted by the preset |
 | `docs/DETAIL.md` | Configuration, log lines, limits |

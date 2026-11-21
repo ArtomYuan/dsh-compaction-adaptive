@@ -1,17 +1,13 @@
 # Bundle layer for dsh-compaction-adaptive.
 #
-# The plugin is a compaction backend (`ctx.compaction`). Exactly one backend may
-# be mounted per realm, and the active Agent preset owns that realm, so the row
-# is mounted where the preset declares its compaction group — replacing
-# `@deepseek-ai/dsh-compaction-basic` in that group's plugin list:
+# Two halves, two homes:
 #
-#   - id: compaction-adaptive
-#     name: 'dsh-compaction-adaptive'
-#     config:
-#       mode: adaptive
-#
-# This layer therefore inserts nothing by itself: a second Host-level backend
-# would run beside the preset's engine and compact the same session twice.
-# Installing the bundle makes the package resolvable and keeps it in the
-# profile; the preset row above is the mount point.
-[]
+# 1. The compaction backend (`ctx.compaction`) lives where the Agent preset
+#    declares its compaction group, so the preset row mounts it (see
+#    docs/DETAIL.md) — not here.
+# 2. The insight panel's host half registers a *session projection*, a host-level
+#    registry the browser reads. That row belongs to the profile, so it is
+#    inserted here.
+- insert:
+    - id: compaction-insight
+      name: 'dsh-compaction-adaptive/insight-host'

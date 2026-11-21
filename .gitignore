@@ -15,3 +15,7 @@ Thumbs.db
 
 # Never commit registry credentials
 .npmrc
+
+# pnpm state from a local dd while developing
+pnpm-lock.yaml
+
