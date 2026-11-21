@@ -2,6 +2,9 @@
 
 Adaptive context compaction for DeepSeek Harness.
 
+[![npm](https://img.shields.io/npm/v/dsh-compaction-adaptive)](https://www.npmjs.com/package/dsh-compaction-adaptive)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 The plugin is a compaction backend (`ctx.compaction`) built on
 `@deepseek-ai/dsh-compaction-basic`: it keeps that backend's durable
 compaction protocol and replaces only its numeric policy. Before every
@@ -132,6 +135,26 @@ Reuses `compaction-basic`'s protocol, so session replay, summary checkpoints,
 the busy lock, overflow recovery, and `/compact` are unchanged. It does not
 change which surface range is compacted, and it drops reasoning blocks from
 digested parts.
+
+## Releasing
+
+Pushing a `v*` tag runs [`.github/workflows/publish.yml`](.github/workflows/publish.yml):
+the checks run first, then `npm stage publish` over OIDC. The version is *staged*,
+not live — a maintainer approves it with 2FA on npmjs.com under **Staged Packages**
+(or `npm stage approve <id>`). An OIDC token cannot approve by design, so the human
+gate is on approval rather than on a stored token.
+
+The trusted publisher is registered as stage-only, which makes a direct
+`npm publish` from the workflow fail:
+
+```sh
+npm trust github dsh-compaction-adaptive \
+  --file publish.yml --repo ArtomYuan/dsh-compaction-adaptive --allow-stage-publish
+```
+
+The same fields exist in the package's **Settings → Trusted publishing** page
+(owner `ArtomYuan`, repository `dsh-compaction-adaptive`, workflow `publish.yml`,
+environment empty).
 
 ## Files
 
