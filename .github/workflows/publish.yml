@@ -1,0 +1,56 @@
+# Publish to npm from a tag, with no long-lived token.
+#
+# Trusted publishing (OIDC) needs the package to already exist on the registry:
+# npm only exposes the "Trusted publishing" settings page for a published
+# package, so the very first version has to be pushed once by an authenticated
+# maintainer (upstream: npm/cli#8544). After that first publish, register this
+# workflow as the package's trusted publisher on npmjs.com (Package → Settings →
+# Trusted publishing → GitHub: ArtomYuan/dsh-compaction-adaptive, workflow
+# `publish.yml`, environment empty) and every later tag publishes from here.
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required by trusted publishing: lets npm exchange this workflow's identity
+  # for a short-lived publish credential.
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run the checks
+        run: |
+          node test/policy.test.mjs
+          node test/chunking.test.mjs
+          node test/adaptive-chunking.test.mjs
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Ensure an OIDC-capable npm (>= 11.5.1)
+        run: npm install -g npm@latest
+      - name: Publish
+        # No NODE_AUTH_TOKEN: the CLI detects the OIDC environment and requests a
+        # short-lived credential from the registry instead of falling back to a
+        # token, which is also why provenance is attached automatically.
+        run: npm publish --access public --provenance
