@@ -1,12 +1,16 @@
-# Publish to npm from a tag, with no long-lived token.
+# Publish to npm from a tag: stage from CI, approve as a human.
 #
-# Trusted publishing (OIDC) needs the package to already exist on the registry:
-# npm only exposes the "Trusted publishing" settings page for a published
-# package, so the very first version has to be pushed once by an authenticated
-# maintainer (upstream: npm/cli#8544). After that first publish, register this
-# workflow as the package's trusted publisher on npmjs.com (Package → Settings →
-# Trusted publishing → GitHub: ArtomYuan/dsh-compaction-adaptive, workflow
-# `publish.yml`, environment empty) and every later tag publishes from here.
+# The workflow stages the tarball (no token, no 2FA); a maintainer then approves
+# the staged version with 2FA on npmjs.com (Staged Packages) or with
+# `npm stage approve <id>`. Approval is the human gate: an OIDC token cannot
+# perform it, by design.
+#
+# Setup, once: register this workflow as the package's trusted publisher with
+#   npm trust github dsh-compaction-adaptive \
+#     --file publish.yml --repo ArtomYuan/dsh-compaction-adaptive --allow-stage-publish
+# Stage-only means a direct `npm publish` from this workflow is rejected. The
+# very first version was published by hand, because npm only exposes trusted
+# publisher settings for a package that already exists (npm/cli#8544).
 name: publish
 
 on:
@@ -17,7 +21,7 @@ on:
 permissions:
   contents: read
   # Required by trusted publishing: lets npm exchange this workflow's identity
-  # for a short-lived publish credential.
+  # for a short-lived, workflow-scoped credential.
   id-token: write
 
 concurrency:
@@ -38,7 +42,7 @@ jobs:
           node test/chunking.test.mjs
           node test/adaptive-chunking.test.mjs
 
-  publish:
+  stage:
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -47,10 +51,9 @@ jobs:
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
-      - name: Ensure an OIDC-capable npm (>= 11.5.1)
+      - name: Ensure a staged-publishing-capable npm (>= 11.15.0)
         run: npm install -g npm@latest
-      - name: Publish
+      - name: Stage the release
         # No NODE_AUTH_TOKEN: the CLI detects the OIDC environment and requests a
-        # short-lived credential from the registry instead of falling back to a
-        # token, which is also why provenance is attached automatically.
-        run: npm publish --access public --provenance
+        # short-lived credential instead of falling back to a stored token.
+        run: npm stage publish --access public
