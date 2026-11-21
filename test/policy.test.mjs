@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Plain-Node checks for the adaptive planning math.
  * Run: ELECTRON_RUN_AS_NODE=1 "<dsh node>" test/policy.test.mjs
  */
