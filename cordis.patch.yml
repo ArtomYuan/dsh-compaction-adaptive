@@ -1,13 +1,14 @@
 # Bundle layer for dsh-compaction-adaptive.
 #
-# Two halves, two homes:
+# One package, two rows, and the row name decides what loads:
 #
-# 1. The compaction backend (`ctx.compaction`) lives where the Agent preset
-#    declares its compaction group, so the preset row mounts it (see
-#    docs/DETAIL.md) — not here.
-# 2. The insight panel's host half registers a *session projection*, a host-level
-#    registry the browser reads. That row belongs to the profile, so it is
-#    inserted here.
+# - This row names the **package root**, which is the insight panel's host half.
+#   It has to be an exact package specifier: `dsh-client-modules` treats a row
+#   whose name carries a subpath as "not a client row" and never loads the
+#   `./client` bundle, so no panel entry would ever appear.
+# - The compaction backend is `dsh-compaction-adaptive/engine`, mounted by the
+#   Agent preset inside its `compaction` group (see docs/DETAIL.md). That row is
+#   deliberately a subpath, so it stays a host-only row.
 - insert:
     - id: compaction-insight
-      name: 'dsh-compaction-adaptive/insight-host'
+      name: 'dsh-compaction-adaptive'

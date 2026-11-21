@@ -1,46 +1,22 @@
 /**
- * Host row for the insight panel.
+ * Backwards-compatible alias for the pre-0.3 root row name.
  *
- * The compaction backend itself is mounted by the Agent preset. This row lives
- * in the profile instead, because a session projection is a host-level registry
- * whose values the browser reads — the browser half (`./client`) can only see
- * what a host half publishes.
+ * The projection host now lives at the package root (see `../index.js`) because a
+ * profile row's `name` must be an exact package specifier for its client bundle
+ * to load. This module stays so an existing row that names
+ * `dsh-compaction-adaptive/insight-host` keeps working.
  *
  * @module dsh-compaction-adaptive/insight-host
  */
 
-import { insightProjectionDefinition } from './lib/projection.js'
+import { attachInsightProjection } from './lib/projection-host.js'
 
-export const name = 'compaction-insight-host'
+export const name = 'compaction-insight'
 
-/** The projection registry must exist before this row activates. */
 export const inject = ['sessionProjections']
 
-/**
- * Register the read-only projection behind the panel.
- * @param {any} ctx - plugin context.
- */
 export function apply(ctx) {
-  let disposed = false
-  let handle
-  ctx.effect(() => () => {
-    disposed = true
-    handle?.dispose?.()
-  }, 'compaction-insight projection lifetime')
-
-  ctx.sessionProjections.register(insightProjectionDefinition).then(
-    (registered) => {
-      handle = registered
-      if (disposed) {
-        handle?.dispose?.()
-        return
-      }
-      ctx.logger?.info(`[compaction-insight] projection "${insightProjectionDefinition.key}" registered`)
-    },
-    (error) => {
-      ctx.logger?.warn(`[compaction-insight] projection registration failed: ${error instanceof Error ? error.message : String(error)}`)
-    },
-  )
+  attachInsightProjection(ctx)
 }
 
 export default { name, inject, apply }
