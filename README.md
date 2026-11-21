@@ -119,6 +119,7 @@ Checks run without a Harness process:
 node test/policy.test.mjs          # threshold / tail planning
 node test/chunking.test.mjs        # packing, projection, prompts, concurrency
 node test/adaptive-chunking.test.mjs  # model-derived budgets, shrink/recover
+node test/insight.test.mjs         # panel projections: budget card, chunk card, transactions
 ```
 
 At runtime:
@@ -162,6 +163,7 @@ environment empty).
 | --- | --- |
 | `lib/policy.js` | Pure planning math (window, growth, threshold, tail); no Cordis dependency |
 | `lib/chunking.js` | Budget derivation, packing, text projection, digest/fold prompts, bounded concurrency |
+| `lib/insight.js` | Read-only projections for the observation panel: budget card, chunk card, compaction transactions |
 | `lib/index.js` | The backend: observes, plans, installs the per-model policy, summarizes, delegates |
 | `cordis.patch.yml` | Bundle layer; explains why the row is mounted by the preset |
 | `docs/DETAIL.md` | Configuration, log lines, limits |
