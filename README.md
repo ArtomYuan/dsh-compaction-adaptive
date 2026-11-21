@@ -36,15 +36,18 @@ Cost ceilings stay expressible: a slow local prefill can cap its route with
 
 ## Install
 
-Requires DeepSeek Harness `>= 0.2.2-rc.1`. There is no build step: the repository
-is the package, so the install is one line.
+Requires DeepSeek Harness `>= 0.2.2-rc.1`. There is no build step: the published
+package is the repository.
 
 ```sh
+# from npm — the shortest form
+dsh plugin --profile desktop add dsh-compaction-adaptive
+
 # straight from GitHub
 dsh plugin --profile desktop add https://github.com/ArtomYuan/dsh-compaction-adaptive
 
 # pinned to a tag, for a reproducible profile
-dsh plugin --profile desktop add https://codeload.github.com/ArtomYuan/dsh-compaction-adaptive/tar.gz/refs/tags/v0.1.1
+dsh plugin --profile desktop add https://codeload.github.com/ArtomYuan/dsh-compaction-adaptive/tar.gz/refs/tags/v0.1.2
 
 # or a local checkout, while developing
 dsh plugin --profile desktop add D:\path\to\dsh-compaction-adaptive

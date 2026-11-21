@@ -12,3 +12,6 @@ Thumbs.db
 # Local scratch
 *.log
 *.local.*
+
+# Never commit registry credentials
+.npmrc
