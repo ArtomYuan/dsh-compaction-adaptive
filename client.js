@@ -132,12 +132,36 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'],
+      // Service injection, not module arrival: Cordis refuses to hand over a
+      // property that is not declared here ("cannot get property
+      // \"sidebarRightTabs\" without inject"), which failed the whole browser
+      // half before it could register anything.
+      inject: ['slots', 'sidebarRightTabs', 'sidebarRight'],
       apply(ctx) {
         const id = TYPE
 
+        // Register in the order that matters most. The sidebar entry goes first
+        // so a failure in any later registration cannot hide the panel entirely,
+        // and every registration reports its own failure: one bad slot option
+        // must not take the whole plugin down silently.
+        const step = (label, run) => {
+          try {
+            return run()
+          } catch (error) {
+            console.error(`[compaction-insight] ${label} failed:`, error)
+            return undefined
+          }
+        }
+
+        ctx.effect(() => step('sidebar entry', () => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+          name: 'sidebar.panellist',
+          id,
+          order: 30,
+          label: () => '压缩洞察',
+        }, PanelIcon))), 'dsh-compaction-adaptive: sidebar entry')
+
         // One type, one tab per session: opening it again reveals it.
-        ctx.effect(() => ctx.sidebarRightTabs.register({
+        ctx.effect(() => step('tab type', () => ctx.sidebarRightTabs.register({
           id,
           kind: TYPE,
           multiple: false,
@@ -149,22 +173,22 @@ window.__ModuleLoader__.load({
             title: () => '压缩洞察',
             description: () => '查看压缩事务、影子区间与摘要路由',
           }],
-        }), 'dsh-compaction-adaptive: tab type')
+        })), 'dsh-compaction-adaptive: tab type')
 
-        ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
+        ctx.effect(() => step('tab body', () => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
           { name: 'sidebar.right.pane.tab', key: id },
           Panel,
-        )), 'dsh-compaction-adaptive: tab body')
+        ))), 'dsh-compaction-adaptive: tab body')
 
-        ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
+        ctx.effect(() => step('tab title', () => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
           { name: 'sidebar.right.pane.tab.title', key: id },
           Title,
-        )), 'dsh-compaction-adaptive: tab title')
+        ))), 'dsh-compaction-adaptive: tab title')
 
-        // Left-sidebar entry: the same id as the tab type, so the entry and the
-        // panel share one identity. `main` must exist for the entry to switch to,
-        // hence PanelPage; it forwards to the right sidebar.
-        ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
+        // The main panel exists only so the sidebar entry has somewhere to switch
+        // to; it forwards to the right sidebar, where the session projection is in
+        // scope ('main' is root-scoped and receives no session props).
+        ctx.effect(() => step('main panel', () => ctx.slots.inject('main', () => ctx.slots.register({
           name: 'main',
           key: id,
           inject: () => ({
@@ -172,14 +196,7 @@ window.__ModuleLoader__.load({
               ctx.sidebarRight.openTab(TYPE, {})
             },
           }),
-        }, PanelPage)), 'dsh-compaction-adaptive: main panel')
-
-        ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-          name: 'sidebar.panellist',
-          id,
-          order: 30,
-          label: () => '压缩洞察',
-        }, PanelIcon)), 'dsh-compaction-adaptive: sidebar entry')
+        }, PanelPage))), 'dsh-compaction-adaptive: main panel')
       },
     }
   },
