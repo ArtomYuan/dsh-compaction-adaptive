@@ -1,6 +1,6 @@
 {
   "name": "dsh-compaction-adaptive",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": false,
   "description": "Adaptive context compaction for DeepSeek Harness: derives each model's pressure threshold and retained tail from its context window and the session's measured growth.",
   "icon": "icon.svg",

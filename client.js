@@ -107,7 +107,7 @@ window.__ModuleLoader__.load({
       },
       h('span', { style: { color: COLORS.muted, font: MONO } }, when),
       h('span', { style: { fontSize: 12, lineHeight: 1.6 } },
-        `${record.manual ? '手动 /compact' : '自动'} · 影子 `,
+        `${record.manual ? '手动 /compact' : '自动'} · 折叠 `,
         h('b', null, tok(record.shadowedTokenCount)),
         record.shadowedNodes === undefined ? '' : ` · ${record.shadowedNodes} 节点`,
         h('br'),
@@ -265,7 +265,7 @@ window.__ModuleLoader__.load({
             h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '压缩'),
             h('div', { style: { font: MONO, fontSize: 13 } }, String(totals.total))),
           h('div', null,
-            h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '影子'),
+            h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '折叠'),
             h('div', { style: { font: MONO, fontSize: 13 } }, tok(totals.shadowedTokens))),
           h('div', null,
             h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '阈值'),
@@ -298,10 +298,13 @@ window.__ModuleLoader__.load({
           card('压过的会话', kpi === undefined ? '—' : `${kpi.compactedSessions} / ${kpi.sessions}`),
           card('压缩次数', kpi === undefined ? '—' : String(kpi.transactions),
             kpi === undefined ? undefined : `自动 ${kpi.automatic} · 手动 ${kpi.manual}`),
-          card('影子总量', kpi === undefined ? '—' : tok(kpi.shadowedTokens),
+          card('折叠总量', kpi === undefined ? '—' : tok(kpi.shadowedTokens),
             kpi === undefined || kpi.averageShadowedTokens === null ? undefined : `平均 ${tok(kpi.averageShadowedTokens)}/次`),
           card('成功率', kpi === undefined || kpi.successRate === null ? '—' : pct(kpi.successRate),
             kpi === undefined ? undefined : `失败 ${kpi.failed} 次`)),
+
+        h('div', { style: { color: COLORS.muted, fontSize: 10.5, marginBottom: 10 } },
+          '折叠 = 被摘要替代的原文 tokens：压缩后这段不再进上下文，由摘要代表它。'),
 
         rows.length === 0 && state.status === 'ready'
           ? h('div', { style: { color: COLORS.muted } }, '还没有压缩记录：会话触发过一次压缩后才会出现在这里。')
