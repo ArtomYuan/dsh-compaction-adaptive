@@ -285,16 +285,11 @@ window.__ModuleLoader__.load({
       h('path', { d: 'M11 7.5v5M9 10l2 2 2-2', opacity: 0.85 }))
     }
 
-    /** Tab title. */
-    function Title() {
-      return h('span', { style: { fontSize: 12 } }, '压缩洞察')
-    }
-
     return {
       // Service injection, not module arrival: Cordis refuses to hand over a
       // property that is not declared here, and that failure took the whole
       // browser half down before it could register anything.
-      inject: ['slots', 'sidebarRightTabs', 'sidebarRight', 'uiWorkspace'],
+      inject: ['slots', 'uiWorkspace'],
       apply(ctx) {
         const id = TYPE
         const step = (label, run) => {
@@ -320,31 +315,17 @@ window.__ModuleLoader__.load({
           inject: () => ({ ctxWorkspace: ctx.uiWorkspace }),
         }, Overview))), 'dsh-compaction-adaptive: overview page')
 
-        // Session-scoped detail tab: same numbers, scoped to the open conversation.
-        ctx.effect(() => step('tab type', () => ctx.sidebarRightTabs.register({
+        // Session-scoped detail tab: the row above the conversation
+        // (对话 / 轨迹 / 上下文 / 编队 …), which is the 'conversation.view' list
+        // slot. Session scope means the tab receives sessionId and useProjection.
+        ctx.effect(() => step('conversation tab', () => ctx.slots.inject('conversation.view', () => ctx.slots.register({
+          name: 'conversation.view',
           id,
-          kind: TYPE,
-          multiple: false,
-          priority: 'extension',
-          title: () => '压缩洞察',
-          guide: [{
-            id: 'open',
-            order: 30,
-            title: () => '压缩洞察',
-            description: () => '查看压缩事务、预算条与分块容量',
-          }],
-        })), 'dsh-compaction-adaptive: tab type')
-
-        ctx.effect(() => step('tab body', () => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
-          { name: 'sidebar.right.pane.tab', key: id },
-          (props) => h('div', { style: { padding: '12px 14px' } },
-            h(Detail, { sessionId: props.sessionId })),
-        ))), 'dsh-compaction-adaptive: tab body')
-
-        ctx.effect(() => step('tab title', () => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
-          { name: 'sidebar.right.pane.tab.title', key: id },
-          Title,
-        ))), 'dsh-compaction-adaptive: tab title')
+          order: 40,
+          label: () => '压缩洞察',
+          inject: (sessionId) => ({ sessionId }),
+        }, (props) => h('div', { style: { padding: '16px 20px' } },
+          h(Detail, { sessionId: props.sessionId }))))), 'dsh-compaction-adaptive: conversation tab')
       },
     }
   },
