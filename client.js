@@ -4,9 +4,12 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    /** Projection key published by the host row (`insight-host.js`). */
+    /** Projection key published by the host row. */
     const KEY = 'compaction-adaptive/insight'
+    /** Right-sidebar tab type id. */
     const TYPE = 'compaction-insight'
+    /** Host route serving the same data to a root-scoped page. */
+    const ROUTE = 'compaction-adaptive/insight'
 
     const COLORS = {
       ink: 'var(--dsw-alias-text-primary, #e7e8ea)',
@@ -16,31 +19,72 @@ window.__ModuleLoader__.load({
       ok: '#42c58a',
       warn: '#e0a63c',
       bad: '#e5534b',
-      accent: '#4c8dff',
     }
 
-    /** One transaction row: time, cause, shadowed span, route, outcome. */
+    const TOTALS = [
+      ['自动', (totals) => totals.automatic],
+      ['手动', (totals) => totals.manual],
+      ['失败', (totals) => totals.failed],
+      ['影子', (totals) => `${Math.round(totals.shadowedTokens / 1000)}K`],
+    ]
+
+    /**
+     * The session the panel should describe.
+     *
+     * A `main` panel is root-scoped: it gets no `sessionId` prop, so — the way
+     * `dsh-context` resolves its own page — read the global `useSessions` state
+     * when it exposes a current session, and fall back to the same
+     * `dsh.sessions.current` record the shell writes.
+     * @param {object} props - slot props.
+     * @returns {string | undefined} the session id, when known.
+     */
+    function currentSessionId(props) {
+      try {
+        if (typeof props.useSessions === 'function') {
+          const fromStore = props.useSessions((state) => state?.currentSessionId
+            ?? state?.current?.id
+            ?? state?.selectedSessionId)
+          if (typeof fromStore === 'string' && fromStore !== '') return fromStore
+        }
+      } catch {
+        // The shell's list shape is not part of this plugin's contract; fall through.
+      }
+      try {
+        const raw = window.localStorage.getItem('dsh.sessions.current')
+        const parsed = raw === null ? null : JSON.parse(raw)
+        const id = parsed?.sessionId
+        if (typeof id === 'string' && id !== '') return id
+      } catch {
+        // Storage can be disabled; the page then reports that it has no session.
+      }
+      return undefined
+    }
+
+    /** One transaction row. */
     function Row({ record }) {
       const status = record.status ?? 'running'
       const tone = status === 'ok' ? COLORS.ok : status === 'failed' ? COLORS.bad : COLORS.warn
       const when = record.startedAt === undefined ? '—' : new Date(record.startedAt).toLocaleTimeString()
+      const duration = record.durationMs === null || record.durationMs === undefined
+        ? ''
+        : ` · ${(record.durationMs / 1000).toFixed(1)}s`
       return h('div', {
         style: {
-          display: 'grid', gridTemplateColumns: '66px 1fr auto', gap: 10,
+          display: 'grid', gridTemplateColumns: '70px 1fr auto', gap: 10,
           alignItems: 'baseline', padding: '7px 0', borderBottom: `1px dashed ${COLORS.line}`,
         },
       },
       h('span', { style: { color: COLORS.muted, font: '11px/1 ui-monospace, monospace' } }, when),
-      h('span', { style: { fontSize: 12 } },
+      h('span', { style: { fontSize: 12, lineHeight: 1.6 } },
         `${record.manual ? '手动 /compact' : '自动'} · 影子 `,
-        h('b', null, record.shadowedTokenCount === undefined ? '—' : `${Math.round(record.shadowedTokenCount / 1000)}K`),
+        h('b', null, record.shadowedTokenCount === undefined
+          ? '—'
+          : `${Math.round(record.shadowedTokenCount / 1000)}K`),
         record.shadowedNodes === undefined ? '' : ` · ${record.shadowedNodes} 节点`,
         h('br'),
         h('span', { style: { color: COLORS.muted, fontSize: 11 } },
-          `${record.provider ?? '—'} · 摘要 ${record.summaryChars ?? 0} 字符`,
-          record.durationMs === null || record.durationMs === undefined ? '' : ` · ${(record.durationMs / 1000).toFixed(1)}s`,
-          record.error === undefined ? '' : ` · ${record.error}`),
-      ),
+          `${record.provider ?? '—'} · 摘要 ${record.summaryChars ?? 0} 字符${duration}`,
+          record.error === undefined ? '' : ` · ${record.error}`)),
       h('span', {
         style: {
           color: tone, border: `1px solid ${tone}44`, background: `${tone}18`,
@@ -49,54 +93,94 @@ window.__ModuleLoader__.load({
       }, status === 'ok' ? '成功' : status === 'failed' ? '失败' : '进行中'))
     }
 
-    /** The tab body. */
-    function Panel(props) {
-      const raw = props.useProjection === undefined ? undefined : props.useProjection(KEY)
-      const view = raw?.data ?? raw?.value ?? raw ?? null
-      const totals = view?.totals
-      const records = view?.transactions ?? []
+    /** Totals strip shared by the tab and the page. */
+    function Totals({ totals }) {
+      return h('div', {
+        style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 10 },
+      }, ...TOTALS.map(([label, read]) => h('div', {
+        key: label,
+        style: { background: COLORS.card, border: `1px solid ${COLORS.line}`, borderRadius: 10, padding: '7px 9px' },
+      },
+      h('div', { style: { color: COLORS.muted, fontSize: 11 } }, label),
+      h('div', { style: { font: '16px/1.3 ui-monospace, monospace' } },
+        totals === undefined ? '—' : String(read(totals))))))
+    }
 
+    /** Transaction list shared by the tab and the page. */
+    function Records({ view, empty }) {
+      const records = view?.transactions ?? []
+      if (records.length === 0) {
+        return h('div', { style: { color: COLORS.muted, fontSize: 12, padding: '10px 0' } },
+          view === null || view === undefined ? '读取中…' : empty)
+      }
+      return h('div', null, ...records.map((record) => h(Row, { key: record.compactionId, record })))
+    }
+
+    /** Right-sidebar tab body: session-scoped, reads the projection directly. */
+    function Panel(props) {
+      const view = typeof props.useProjection === 'function' ? props.useProjection(KEY) : undefined
       return h('div', { style: { padding: '12px 14px', color: COLORS.ink, fontSize: 13 } },
         h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 } },
           h('div', { style: { fontWeight: 650 } }, '压缩洞察'),
           h('span', { style: { marginLeft: 'auto', color: COLORS.muted, fontSize: 11 } },
-            totals === undefined ? '读取中…' : `本会话 ${totals.total} 次`)),
-
-        h('div', {
-          style: {
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 10,
-          },
-        }, ...[
-          ['自动', totals?.automatic ?? 0],
-          ['手动', totals?.manual ?? 0],
-          ['失败', totals?.failed ?? 0],
-          ['影子', totals === undefined ? '—' : `${Math.round(totals.shadowedTokens / 1000)}K`],
-        ].map(([label, value]) => h('div', {
-          key: label,
-          style: { background: COLORS.card, border: `1px solid ${COLORS.line}`, borderRadius: 10, padding: '7px 9px' },
-        },
-        h('div', { style: { color: COLORS.muted, fontSize: 11 } }, label),
-        h('div', { style: { font: '16px/1.3 ui-monospace, monospace' } }, String(value))))),
-
-        records.length === 0
-          ? h('div', { style: { color: COLORS.muted, fontSize: 12, padding: '10px 0' } },
-            view === null ? '等待宿主投影…' : '本会话还没有压缩记录。')
-          : h('div', null, ...records.map((record) => h(Row, { key: record.compactionId, record }))),
-
+            view?.totals === undefined ? '读取中…' : `本会话 ${view.totals.total} 次`)),
+        h(Totals, { totals: view?.totals }),
+        h(Records, { view, empty: '本会话还没有压缩记录。' }),
         h('div', { style: { color: COLORS.muted, fontSize: 11, marginTop: 10 } },
-          '预算与分块卡需要引擎的实时状态，下一版接入；这里只显示日志能证明的事实。'),
-      )
+          '数据来自会话投影（compaction/* 事件折叠），不含未落盘的状态。'))
     }
 
-    /** Tab title: the type's own label. */
+    /** Tab title. */
     function Title() {
       return h('span', { style: { fontSize: 12 } }, '压缩洞察')
     }
 
     /**
-     * Left-sidebar list icon. `sidebar.panellist` renders the component passed
-     * as the registration's second argument, and hands it a `size`.
+     * The `main` page behind the left-sidebar entry.
+     *
+     * Root-scoped slots get no session props, so the host serves the page's data
+     * over HTTP and this component asks for the session the shell currently has.
      */
+    function Page(props) {
+      const [state, setState] = React.useState({ status: 'loading' })
+      const sessionId = currentSessionId(props)
+      const load = React.useCallback(() => {
+        if (sessionId === undefined) {
+          setState({ status: 'no-session' })
+          return
+        }
+        setState({ status: 'loading' })
+        const url = new URL(ROUTE, document.baseURI)
+        url.searchParams.set('sessionId', sessionId)
+        fetch(url, { headers: { accept: 'application/json' } })
+          .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
+          .then((view) => { setState({ status: 'ready', view }) })
+          .catch((error) => { setState({ status: 'error', message: error instanceof Error ? error.message : String(error) }) })
+      }, [sessionId])
+      React.useEffect(() => { load() }, [load])
+
+      return h('div', { style: { padding: '22px 26px', color: COLORS.ink, fontSize: 13, maxWidth: 760 } },
+        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 } },
+          h('div', { style: { fontSize: 15, fontWeight: 650 } }, '压缩洞察'),
+          h('button', {
+            type: 'button',
+            onClick: load,
+            style: {
+              marginLeft: 'auto', background: 'transparent', color: COLORS.muted,
+              border: `1px solid ${COLORS.line}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer', fontSize: 12,
+            },
+          }, '刷新')),
+        h('div', { style: { color: COLORS.muted, marginBottom: 14 } },
+          sessionId === undefined ? '未找到当前会话。' : `会话 ${sessionId.slice(0, 18)}… 的压缩事务`),
+        h(Totals, { totals: state.view?.totals }),
+        state.status === 'no-session'
+          ? h('div', { style: { color: COLORS.muted } }, '请先在左侧打开一个会话，再回到这里刷新。')
+          : state.status === 'error'
+            ? h('div', { style: { color: COLORS.bad } }, `读取失败：${state.message}`)
+            : h(Records, { view: state.status === 'ready' ? state.view : null, empty: '本会话还没有压缩记录。' }))
+    }
+
+    /** Left-sidebar list icon. */
     function PanelIcon({ size }) {
       const px = typeof size === 'number' ? size : 16
       return h('svg', {
@@ -107,43 +191,13 @@ window.__ModuleLoader__.load({
       h('path', { d: 'M11 7.5v5M9 10l2 2 2-2', opacity: 0.85 }))
     }
 
-    /**
-     * The `main` panel behind the left-sidebar entry.
-     *
-     * `main` is a root-scoped slot, so it receives no session props and cannot
-     * read the session projection. Rather than show stale or fabricated numbers,
-     * it reveals the real panel in the right sidebar, where the projection is in
-     * scope, and reports what happened if that call is unavailable.
-     */
-    function PanelPage(props) {
-      const [note, setNote] = React.useState('')
-      React.useEffect(() => {
-        try {
-          props.openPanel()
-        } catch (error) {
-          setNote(`无法自动打开右侧栏面板：${error instanceof Error ? error.message : String(error)}`)
-        }
-      }, [])
-      return h('div', { style: { padding: '22px 26px', color: COLORS.ink, fontSize: 13, lineHeight: 1.7 } },
-        h('div', { style: { fontSize: 15, fontWeight: 650, marginBottom: 6 } }, '压缩洞察'),
-        h('div', { style: { color: COLORS.muted } },
-          '面板在右侧栏打开：本会话的压缩事务、影子区间、摘要路由与耗时。'),
-        note === '' ? null : h('div', { style: { color: COLORS.bad, marginTop: 10 } }, note))
-    }
-
     return {
       // Service injection, not module arrival: Cordis refuses to hand over a
-      // property that is not declared here ("cannot get property
-      // \"sidebarRightTabs\" without inject"), which failed the whole browser
-      // half before it could register anything.
+      // property that is not declared here, and that failure took the whole
+      // browser half down before it could register anything.
       inject: ['slots', 'sidebarRightTabs', 'sidebarRight'],
       apply(ctx) {
         const id = TYPE
-
-        // Register in the order that matters most. The sidebar entry goes first
-        // so a failure in any later registration cannot hide the panel entirely,
-        // and every registration reports its own failure: one bad slot option
-        // must not take the whole plugin down silently.
         const step = (label, run) => {
           try {
             return run()
@@ -160,7 +214,11 @@ window.__ModuleLoader__.load({
           label: () => '压缩洞察',
         }, PanelIcon))), 'dsh-compaction-adaptive: sidebar entry')
 
-        // One type, one tab per session: opening it again reveals it.
+        ctx.effect(() => step('main page', () => ctx.slots.inject('main', () => ctx.slots.register({
+          name: 'main',
+          key: id,
+        }, Page))), 'dsh-compaction-adaptive: main page')
+
         ctx.effect(() => step('tab type', () => ctx.sidebarRightTabs.register({
           id,
           kind: TYPE,
@@ -184,19 +242,6 @@ window.__ModuleLoader__.load({
           { name: 'sidebar.right.pane.tab.title', key: id },
           Title,
         ))), 'dsh-compaction-adaptive: tab title')
-
-        // The main panel exists only so the sidebar entry has somewhere to switch
-        // to; it forwards to the right sidebar, where the session projection is in
-        // scope ('main' is root-scoped and receives no session props).
-        ctx.effect(() => step('main panel', () => ctx.slots.inject('main', () => ctx.slots.register({
-          name: 'main',
-          key: id,
-          inject: () => ({
-            openPanel: () => {
-              ctx.sidebarRight.openTab(TYPE, {})
-            },
-          }),
-        }, PanelPage))), 'dsh-compaction-adaptive: main panel')
       },
     }
   },
