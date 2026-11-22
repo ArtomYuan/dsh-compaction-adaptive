@@ -144,19 +144,48 @@ At runtime:
 
 ## Insight panel
 
-The package ships a read-only panel: the left sidebar lists **压缩洞察 / Compaction
-insight** beside the other panels, and the right sidebar exposes the same tab type
-through its guide card. The panel opens one tab per session and lists the
-compaction transactions — when each ran, whether it was automatic or
-`/compact`, the shadowed token count and node count, the summarizing route, the
-summary length, the duration, and the outcome.
+Two surfaces, two jobs. Both are read-only; neither influences compaction.
 
-It reads a *session projection*, not the session itself: `lib/projection.js` folds
-`compaction/*` events into plain state, and the browser reads the published value
-by key through `useProjection`. The projection is registered with
-`wire.summary: false`, so it never rides along in a session summary; and both the
-fold and the view are wrapped so a failure degrades the panel to an empty list
-rather than failing a session load.
+### Inside a session — the tab above the conversation
+
+The session view row (`对话 / 轨迹 / 上下文 / 编队 …`) gains **压缩洞察**, registered on
+the `conversation.view` list slot (session scope, order 40). It describes the open
+conversation:
+
+- a segmented **budget bar**: used tokens, the retained tail, an amber tick where
+  this backend will compact, and the remaining turns of headroom;
+- three stats: used share of the window, threshold share of the window, measured
+  growth per turn;
+- a **chunk card**: the learned capacity multiplier and the chunking mode;
+- the durable **transaction list**: when each compaction ran, automatic or
+  `/compact`, the shadowed token and node counts, the summarizing route, the
+  summary length, the duration, and the outcome.
+
+The budget, tail, threshold, growth and chunk numbers are *live engine state*, not
+logged events, so they cannot ride a projection: the engine publishes each
+planning snapshot into `lib/live.js` (a bounded, process-local registry) and
+`GET /compaction-adaptive/insight?sessionId=…` returns `{ live, view, cold }` for
+the tab.
+
+### In the panel list — the overview
+
+The left sidebar lists **压缩洞察** beside the other panels; it opens a root-scoped
+page spanning **all workspaces**, grouped by working directory, one row per
+session: title, provider, threshold share, used tokens, last planning time. A row
+opens that session. Data comes from `GET /compaction-adaptive/overview`.
+
+The overview lists only sessions this process actually planned: a session that was
+never measured has no window, threshold or growth numbers, and inventing them
+would be worse than leaving it out. Send one message in a session and it appears
+after a refresh.
+
+### How the durable half is projected
+
+`lib/projection.js` folds `compaction/*` events into plain state, and the browser
+reads the published value by key through `useProjection`. The projection is
+registered with `wire.summary: false`, so it never rides along in a session
+summary; both the fold and the view are wrapped, so a failure degrades the panel
+to an empty list rather than failing a session load.
 
 ## Scope
 
@@ -193,6 +222,9 @@ environment empty).
 | `lib/chunking.js` | Budget derivation, packing, text projection, digest/fold prompts, bounded concurrency |
 | `lib/insight.js` | Read-only projections for the observation panel: budget card, chunk card, compaction transactions |
 | `lib/projection.js` | Session projection behind the panel: fold, wire payload, schemas |
+| `lib/live.js` | Process-local registry of each session's latest planning snapshot (budget, tail, threshold, chunk capacity) |
+| `index.js` | Package root: projection host plus the panel's two JSON routes |
+| `client.js` | Browser half: the session view tab and the overview page |
 | `insight-host.js` | Host row that registers the projection (`wire.summary: false`) |
 | `client.js` | Browser half: the `compaction-insight` tab type and its panel |
 | `lib/index.js` | The backend: observes, plans, installs the per-model policy, summarizes, delegates |
