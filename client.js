@@ -192,15 +192,30 @@ window.__ModuleLoader__.load({
         list)
     }
 
-    /** Overview page: every session this process planned, grouped by workspace. */
+    /**
+     * Overview page: the whole session corpus, archived included.
+     *
+     * Root-scoped, so the host answers with durable per-session aggregates
+     * (`/compaction-adaptive/overview`); live planning numbers ride along for the
+     * sessions this process measured.
+     */
     function Overview(props) {
       const [state, setState] = React.useState({ status: 'loading' })
-      const load = React.useCallback(() => { fetchJson(OVERVIEW_ROUTE, {}, setState) }, [])
+      const [page, setPage] = React.useState(0)
+      const load = React.useCallback(() => {
+        setState({ status: 'loading' })
+        fetchJson(OVERVIEW_ROUTE, {}, setState)
+      }, [])
       React.useEffect(() => { load() }, [load])
-      const sessions = state.data?.sessions ?? []
 
-      // Workspace grouping mirrors the left sidebar: cwd from the shell's session list.
-      const cwdOf = (id) => {
+      const kpi = state.data?.kpi
+      const rows = state.data?.sessions ?? []
+      const PAGE = 12
+      const pages = Math.max(1, Math.ceil(rows.length / PAGE))
+      const visible = rows.slice(page * PAGE, page * PAGE + PAGE)
+
+      const cwdOf = (id, fallback) => {
+        if (typeof fallback === 'string' && fallback !== '') return fallback
         try {
           const cwd = props.useSessions?.((list) => list?.byId?.[id]?.cwd)
           return typeof cwd === 'string' && cwd !== '' ? cwd : '未分组'
@@ -208,35 +223,64 @@ window.__ModuleLoader__.load({
           return '未分组'
         }
       }
-      const titleOf = (id) => {
-        try {
-          const title = props.useSessions?.((list) => list?.byId?.[id]?.title)
-          return typeof title === 'string' && title !== '' ? title : id.slice(0, 18)
-        } catch {
-          return id.slice(0, 18)
-        }
-      }
       const open = (id) => {
         try {
-          const workspace = props.ctxWorkspace ?? null
-          if (workspace?.openSession) workspace.openSession(id)
+          props.ctxWorkspace?.openSession?.(id)
         } catch {
-          // Navigation is the shell's; a failed call leaves the page as it is.
+          // Navigation is the shell's; a failure leaves the page as it is.
         }
       }
 
-      const groups = new Map()
-      for (const session of sessions) {
-        const key = cwdOf(session.sessionId)
-        if (!groups.has(key)) groups.set(key, [])
-        groups.get(key).push(session)
+      const card = (label, value, note) => h('div', {
+        key: label,
+        style: { background: COLORS.card, border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: '12px 14px' },
+      },
+      h('div', { style: { color: COLORS.muted, fontSize: 11 } }, label),
+      h('div', { style: { font: MONO, fontSize: 20, margin: '3px 0 2px' } }, value),
+      note === undefined ? null : h('div', { style: { color: COLORS.muted, fontSize: 10.5 } }, note))
+
+      const sessionCard = (row) => {
+        const totals = row.totals ?? { total: 0, automatic: 0, manual: 0, failed: 0, shadowedTokens: 0 }
+        const live = row.live
+        return h('button', {
+          key: row.sessionId,
+          type: 'button',
+          onClick: () => open(row.sessionId),
+          style: {
+            textAlign: 'left', cursor: 'pointer', color: COLORS.ink, background: COLORS.card,
+            border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: '10px 12px',
+            display: 'flex', flexDirection: 'column', gap: 6, minHeight: 104,
+          },
+        },
+        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 6 } },
+          h('span', {
+            style: { fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+          }, row.title),
+          h('span', { style: { marginLeft: 'auto', color: COLORS.muted, fontSize: 10 } },
+            row.lastAt === null ? '' : new Date(row.lastAt).toLocaleDateString())),
+        h('div', { style: { color: COLORS.muted, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+          cwdOf(row.sessionId, row.cwd)),
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 'auto' } },
+          h('div', null,
+            h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '压缩'),
+            h('div', { style: { font: MONO, fontSize: 13 } }, String(totals.total))),
+          h('div', null,
+            h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '影子'),
+            h('div', { style: { font: MONO, fontSize: 13 } }, tok(totals.shadowedTokens))),
+          h('div', null,
+            h('div', { style: { color: COLORS.muted, fontSize: 9.5 } }, '阈值'),
+            h('div', { style: { font: MONO, fontSize: 13, color: live === null ? COLORS.muted : COLORS.ink } },
+              live === null ? '—' : pct(live.thresholdShare)))),
+        totals.failed === 0
+          ? null
+          : h('div', { style: { color: COLORS.bad, fontSize: 10 } }, `失败 ${totals.failed} 次`))
       }
 
-      return h('div', { style: { padding: '22px 26px', color: COLORS.ink, fontSize: 13, maxWidth: 980 } },
-        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 } },
-          h('div', { style: { fontSize: 15, fontWeight: 650 } }, '压缩洞察 · 总览'),
+      return h('div', { style: { padding: '20px 26px', color: COLORS.ink, fontSize: 13 } },
+        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 } },
+          h('div', { style: { fontSize: 16, fontWeight: 650 } }, '压缩洞察'),
           h('span', { style: { color: COLORS.muted, fontSize: 11.5 } },
-            `本进程规划过 ${sessions.length} 个会话`),
+            state.data === undefined ? '' : `扫描 ${rows.length} 个会话${state.data.skipped > 0 ? `，跳过 ${state.data.skipped} 个` : ''}${state.data.cached ? '（缓存）' : ''}`),
           h('button', {
             type: 'button',
             onClick: load,
@@ -245,33 +289,43 @@ window.__ModuleLoader__.load({
               border: `1px solid ${COLORS.line}`, borderRadius: 8, padding: '3px 10px', fontSize: 12,
             },
           }, '刷新')),
-        h('div', { style: { color: COLORS.muted, fontSize: 11.5, marginBottom: 14 } },
-          '只统计本进程实际做过规划的会话；没有实时数字的会话不在这里凭空出现。'),
-        state.status === 'error' ? h('div', { style: { color: COLORS.bad } }, `读取失败：${state.message}`) : null,
-        sessions.length === 0 && state.status === 'ready'
-          ? h('div', { style: { color: COLORS.muted } }, '还没有会话触发过规划。先在会话里发一条消息，再回来刷新。')
+
+        state.status === 'error'
+          ? h('div', { style: { color: COLORS.bad, marginBottom: 10 } }, `读取失败：${state.message}`)
           : null,
-        ...[...groups.entries()].map(([cwd, rows]) => h('div', { key: cwd, style: { marginBottom: 18 } },
-          h('div', { style: { color: COLORS.muted, fontSize: 11.5, marginBottom: 6 } }, cwd),
-          h('div', { style: { border: `1px solid ${COLORS.line}`, borderRadius: 10, overflow: 'hidden' } },
-            ...rows.map((row, index) => h('button', {
-              key: row.sessionId,
+
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 16 } },
+          card('压过的会话', kpi === undefined ? '—' : `${kpi.compactedSessions} / ${kpi.sessions}`),
+          card('压缩次数', kpi === undefined ? '—' : String(kpi.transactions),
+            kpi === undefined ? undefined : `自动 ${kpi.automatic} · 手动 ${kpi.manual}`),
+          card('影子总量', kpi === undefined ? '—' : tok(kpi.shadowedTokens),
+            kpi === undefined || kpi.averageShadowedTokens === null ? undefined : `平均 ${tok(kpi.averageShadowedTokens)}/次`),
+          card('成功率', kpi === undefined || kpi.successRate === null ? '—' : pct(kpi.successRate),
+            kpi === undefined ? undefined : `失败 ${kpi.failed} 次`)),
+
+        rows.length === 0 && state.status === 'ready'
+          ? h('div', { style: { color: COLORS.muted } }, '还没有压缩记录：会话触发过一次压缩后才会出现在这里。')
+          : null,
+
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 } },
+          ...visible.map(sessionCard)),
+
+        pages > 1
+          ? h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, color: COLORS.muted, fontSize: 11.5 } },
+            h('button', {
               type: 'button',
-              onClick: () => open(row.sessionId),
-              style: {
-                display: 'grid', width: '100%', textAlign: 'left', cursor: 'pointer', gap: 8,
-                gridTemplateColumns: '1fr 92px 74px 82px 92px',
-                alignItems: 'center', padding: '9px 12px', background: 'transparent',
-                color: COLORS.ink, border: 'none',
-                borderTop: index === 0 ? 'none' : `1px solid ${COLORS.line}`,
-              },
-            },
-            h('span', { style: { fontSize: 12.5 } }, titleOf(row.sessionId)),
-            h('span', { style: { font: MONO, color: COLORS.muted } }, `${row.provider ?? '—'}`),
-            h('span', { style: { font: MONO } }, pct(row.thresholdShare)),
-            h('span', { style: { font: MONO } }, tok(row.totalTokens)),
-            h('span', { style: { font: MONO, color: COLORS.muted } },
-              row.at === null ? '—' : new Date(row.at).toLocaleTimeString())))))))
+              disabled: page === 0,
+              onClick: () => setPage(Math.max(0, page - 1)),
+              style: { background: 'transparent', color: 'inherit', border: `1px solid ${COLORS.line}`, borderRadius: 8, padding: '2px 9px', cursor: page === 0 ? 'default' : 'pointer' },
+            }, '上一页'),
+            h('span', null, `${page + 1} / ${pages}`),
+            h('button', {
+              type: 'button',
+              disabled: page >= pages - 1,
+              onClick: () => setPage(Math.min(pages - 1, page + 1)),
+              style: { background: 'transparent', color: 'inherit', border: `1px solid ${COLORS.line}`, borderRadius: 8, padding: '2px 9px', cursor: page >= pages - 1 ? 'default' : 'pointer' },
+            }, '下一页'))
+          : null)
     }
 
     /** Left-sidebar list icon. */

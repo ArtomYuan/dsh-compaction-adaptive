@@ -23,6 +23,7 @@
 import { attachInsightProjection } from './lib/projection-host.js'
 import { INSIGHT_PROJECTION_KEY, viewInsight } from './lib/projection.js'
 import { liveSessions, readLive } from './lib/live.js'
+import { overviewPayload, resetOverviewCache } from './lib/aggregate.js'
 
 /** One session: durable transactions plus the live snapshot. */
 const DETAIL_ROUTE = '/compaction-adaptive/insight'
@@ -41,18 +42,23 @@ export const inject = ['sessionProjections']
 export function apply(ctx) {
   attachInsightProjection(ctx)
 
-  ctx.inject(['webServer', 'sessionProjections'], (scope) => {
+  ctx.inject(['webServer', 'sessionProjections', 'sessionQuery'], (scope) => {
     scope.effect(() => scope.webServer.register({
       kind: 'exact',
       path: DETAIL_ROUTE,
       handler: (req, res) => { serveDetail(scope, req, res) },
     }), 'compaction-insight: detail route')
 
-    scope.effect(() => scope.webServer.register({
-      kind: 'exact',
-      path: OVERVIEW_ROUTE,
-      handler: (req, res) => { serveOverview(res) },
-    }), 'compaction-insight: overview route')
+    scope.effect(() => {
+      scope.webServer.register({
+        kind: 'exact',
+        path: OVERVIEW_ROUTE,
+        handler: (req, res) => { void serveOverview(scope, req, res) },
+      })
+      return () => {
+        resetOverviewCache()
+      }
+    }, 'compaction-insight: overview route')
   })
 }
 
@@ -102,30 +108,49 @@ function serveDetail(ctx, req, res) {
 }
 
 /**
- * Overview for the root-scoped page: every session this process planned, with
- * the live numbers that describe it. Sessions never planned in this process are
- * absent — their numbers do not exist yet, and inventing them would be worse.
+ * Overview for the root-scoped page: the whole session corpus (archived
+ * included), one row per session with its durable compaction totals, plus the
+ * live planning numbers this process holds for the sessions it measured.
+ * @param {any} ctx - plugin context.
+ * @param {import('node:http').IncomingMessage} req - request.
  * @param {import('node:http').ServerResponse} res - response.
+ * @returns {Promise<void>} resolves after the response is written.
  */
-function serveOverview(res) {
+async function serveOverview(ctx, req, res) {
   try {
-    send(res, 200, {
-      sessions: liveSessions().map(({ sessionId, snapshot }) => ({
-        sessionId,
-        at: snapshot?.at ?? null,
-        provider: snapshot?.provider ?? null,
-        model: snapshot?.model ?? null,
-        trigger: snapshot?.trigger ?? null,
-        windowTokens: snapshot?.measurement?.windowTokens ?? null,
-        totalTokens: snapshot?.measurement?.totalTokens ?? null,
-        thresholdTokens: snapshot?.plan?.thresholdTokens ?? null,
-        thresholdShare: snapshot?.plan?.thresholdShare ?? null,
-        tailTokens: snapshot?.plan?.tailTokens ?? null,
-        growthTokens: snapshot?.plan?.growthTokens ?? null,
-        turnsToThreshold: snapshot?.plan?.turnsToThreshold ?? null,
-        chunk: snapshot?.chunk ?? null,
-      })),
-    })
+    const url = new URL(req.url ?? OVERVIEW_ROUTE, 'http://local')
+    const query = url.searchParams.get('q') ?? ''
+    const wanted = url.searchParams.get('limit')
+    const limit = wanted === null ? undefined : Math.max(1, Math.min(200, Number(wanted) || 60))
+    const payload = await overviewPayload(ctx, limit === undefined ? {} : { limit })
+    const live = new Map(liveSessions().map(({ sessionId, snapshot }) => [sessionId, snapshot]))
+    const rows = payload.rows
+      .map((row) => {
+        const snapshot = live.get(row.sessionId)
+        return {
+          ...row,
+          live: snapshot === undefined
+            ? null
+            : {
+              provider: snapshot.provider ?? null,
+              model: snapshot.model ?? null,
+              windowTokens: snapshot.measurement?.windowTokens ?? null,
+              totalTokens: snapshot.measurement?.totalTokens ?? null,
+              thresholdShare: snapshot.plan?.thresholdShare ?? null,
+              tailTokens: snapshot.plan?.tailTokens ?? null,
+              growthTokens: snapshot.plan?.growthTokens ?? null,
+              turnsToThreshold: snapshot.plan?.turnsToThreshold ?? null,
+              chunk: snapshot.chunk ?? null,
+              at: snapshot.at ?? null,
+            },
+        }
+      })
+      .filter((row) => {
+        if (query === '') return true
+        const haystack = `${row.title ?? ''} ${row.cwd ?? ''} ${row.sessionId}`.toLowerCase()
+        return haystack.includes(query.toLowerCase())
+      })
+    send(res, 200, { kpi: payload.kpi, sessions: rows, skipped: payload.skipped, at: payload.at, cached: payload.cached })
   } catch (error) {
     send(res, 500, { error: error instanceof Error ? error.message : String(error) })
   }
