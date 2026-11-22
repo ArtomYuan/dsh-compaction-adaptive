@@ -230,6 +230,7 @@ environment empty).
 | `lib/index.js` | The backend: observes, plans, installs the per-model policy, summarizes, delegates |
 | `cordis.patch.yml` | Bundle layer; explains why the row is mounted by the preset |
 | `docs/DETAIL.md` | Configuration, log lines, limits |
+| `docs/DEVELOPMENT.md` | Code map for maintainers: what each file owns, the data flows, the contracts that must not change, how to verify |
 
 ## License
 
