@@ -32,6 +32,8 @@ DSH 插件不是"一个东西"，而是两个独立加载的半边，作用域�
 | `lib/projection.js` | **会话投影**：`compaction/*` 事件 → 事务表；`wire.view` 输出面板载荷；zod schema；**`summary: false`** | 实时数字（投影必须可回放） |
 | `lib/projection-host.js` | 把上面那个投影注册到 `ctx.sessionProjections`，生命周期挂在行上 | 业务逻辑 |
 | `lib/live.js` | **进程内注册表**（上限 64）：每个会话最近一次规划快照。预算/尾窗/阈值/分块容量只能从这里拿 | 持久化 |
+| `lib/aggregate.js` | **跨会话聚合**：`sessionQuery.listSessions()` 枚举 + `observeSession` 读投影，产出 KPI 与会话行，15 秒缓存 | 实时数字 |
+| `lib/shrink.js` | **自适应收缩规划**：收益门槛、派生预算、重试阶梯、按路由学比例 | IO / ctx |
 | `client.js` | 浏览器半边：`conversation.view` 会话内 tab（`Detail`）+ `sidebar.panellist` 入口与 root 页（`Overview`）；`fetchJson` 取数；UI 组件与样式 | 业务判定 |
 | `cordis.patch.yml` | bundle 层：插入 `compaction-insight` 行（**行名必须是包根**） | 引擎行（那是 preset 的事） |
 | `locale/*.json`、`icon.svg` | 插件元信息与图标 | — |
@@ -115,6 +117,7 @@ node test/chunking.test.mjs          # 分块：装箱、提示词、并发、�
 node test/adaptive-chunking.test.mjs # 模型预算、收缩/恢复
 node test/insight.test.mjs           # 面板字段计算
 node test/projection.test.mjs        # 投影折叠、wire 载荷、schema、40 条上限
+node test/shrink.test.mjs            # 收缩规划：收益门槛、预算阶梯、比例学习
 ```
 
 需要宿主环境的验证手段（不需要开 GUI）：
